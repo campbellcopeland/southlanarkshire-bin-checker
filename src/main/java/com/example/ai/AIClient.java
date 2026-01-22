@@ -1,3 +1,5 @@
+package com.example.ai;
+
 public class AIClient {
     private String apiKey;
     private String apiEndpoint;

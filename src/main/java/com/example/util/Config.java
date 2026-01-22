@@ -1,3 +1,5 @@
+package com.example.util;
+
 public class Config {
     // This class handles configuration settings for the application.
     

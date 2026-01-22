@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bin Collection Checker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 50px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .bin-icons {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .bin-icon {
+            text-align: center;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .bin-icon .emoji {
+            font-size: 3em;
+            margin-bottom: 8px;
+        }
+
+        .bin-icon p {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.05em;
+        }
+
+        input[type="url"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="url"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .preset-button {
+            background: #f5f5f5;
+            color: #667eea;
+            border: 2px solid #667eea;
+            margin-top: 10px;
+            font-size: 0.95em;
+        }
+
+        .preset-button:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 30px;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .info-box strong {
+            color: #667eea;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .bin-icons {
+                gap: 10px;
+            }
+
+            .bin-icon .emoji {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗑️ Bin Collection Checker</h1>
+            <p>Find out when your bins are collected</p>
+        </div>
+
+        <div class="bin-icons">
+            <div class="bin-icon">
+                <div class="emoji">♻️</div>
+                <p>Recyclables</p>
+            </div>
+            <div class="bin-icon">
+                <div class="emoji">🌱</div>
+                <p>Garden Waste</p>
+            </div>
+            <div class="bin-icon">
+                <div class="emoji">🏚️</div>
+                <p>General Waste</p>
+            </div>
+            <div class="bin-icon">
+                <div class="emoji">🍽️</div>
+                <p>Food Waste</p>
+            </div>
+        </div>
+
+        <form method="POST" action="/check-bins">
+            <div class="form-group">
+                <label for="url">Enter the South Lanarkshire Council URL:</label>
+                <input type="url" id="url" name="url" placeholder="https://www.southlanarkshire.gov.uk/..." 
+                       value="https://www.southlanarkshire.gov.uk/directory_record/574605/clincarthill_road_rutherglen" required>
+            </div>
+            <button type="submit">Check Bin Collection</button>
+            <button type="button" class="preset-button" onclick="document.getElementById('url').value='https://www.southlanarkshire.gov.uk/directory_record/574605/clincarthill_road_rutherglen'; document.querySelector('form').submit();">
+                Use Example Address
+            </button>
+        </form>
+
+        <div class="info-box">
+            <strong>💡 Tip:</strong> Visit the South Lanarkshire Council website to find your postcode URL, then paste it above to get your bin collection schedule.
+        </div>
+    </div>
+</body>
+</html>

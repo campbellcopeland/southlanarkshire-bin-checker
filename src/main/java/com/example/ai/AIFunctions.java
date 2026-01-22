@@ -1,3 +1,5 @@
+package com.example.ai;
+
 public class AIFunctions {
 
     public static String processData(String input) {
