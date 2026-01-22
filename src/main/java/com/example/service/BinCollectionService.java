@@ -32,6 +32,7 @@ public class BinCollectionService {
             java.util.List<Map<String, String>> filteredThisWeek = new java.util.ArrayList<>();
             for (Object item : rawThisWeek) {
                 if (item instanceof java.util.Map) {
+                    @SuppressWarnings("unchecked")
                     Map<String, String> binMap = (Map<String, String>) item;
                     // Only include if it has a description (the bin type)
                     if (binMap.get("description") != null && !binMap.get("description").trim().isEmpty()) {
@@ -42,7 +43,9 @@ public class BinCollectionService {
             data.setThisWeekCollections(filteredThisWeek);
             
             data.setPageTitle((String) rawData.getOrDefault("pageTitle", "Bin Collection Info"));
-            data.setLocation((Map<String, String>) rawData.getOrDefault("location", new java.util.HashMap<>()));
+            @SuppressWarnings("unchecked")
+            Map<String, String> location = (Map<String, String>) rawData.getOrDefault("location", new java.util.HashMap<>());
+            data.setLocation(location);
         } else {
             data.setSuccess(false);
             data.setError((String) rawData.getOrDefault("error", "Unknown error"));
