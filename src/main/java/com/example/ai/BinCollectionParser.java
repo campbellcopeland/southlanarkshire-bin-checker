@@ -6,14 +6,37 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class BinCollectionParser {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     private static final int TIMEOUT = 10000;
+    
+    // Magic number constants
+    private static final int MIN_TEXT_LENGTH = 20;
+    private static final int MAX_TEXT_LENGTH = 500;
+    private static final int CONTEXT_WINDOW = 100;
+    
+    // Bin type constants
+    private static final String BLUE_BIN_DESC = "Blue bin - Paper and card";
+    private static final String BURGUNDY_BIN_DESC = "Burgundy bin - Food and garden waste";
+    private static final String LIGHT_GREY_BIN_DESC = "Light grey bin - Glass, cans and plastics";
+    private static final String BLACK_BIN_DESC = "Black/Green bin - General waste";
+    
+    private static final String COLLECTION_THIS_WEEK = "Collection this week";
+    
+    // Section boundary markers
+    private static final Set<String> SECTION_BOUNDARIES = Set.of(
+        "fortnightly", "next week", "area"
+    );
 
     public Map<String, Object> parseBinCollectionInfo(String url) {
         Map<String, Object> result = new HashMap<>();
@@ -41,11 +64,9 @@ public class BinCollectionParser {
         List<Map<String, String>> thisWeekBins = new ArrayList<>();
 
         String pageText = doc.body().text();
+        String lowerPageText = pageText.toLowerCase(); // Cache lowercased version
         
-        // Try to find bin collection schedules in common elements
-        Elements containers = doc.select("[class*='bin'], [class*='collection'], [class*='waste'], [id*='bin'], [id*='collection']");
-        
-        // Also search for tables and divs that might contain bin info
+        // Search for tables and divs that might contain bin info
         Elements tables = doc.select("table");
         Elements divs = doc.select("div[class*='info'], div[class*='content'], div[class*='schedule']");
 
@@ -57,20 +78,21 @@ public class BinCollectionParser {
         // Extract from divs with specific keywords
         for (Element div : divs) {
             String text = div.text();
-            if (text.toLowerCase().contains("collection") || 
-                text.toLowerCase().contains("bin") ||
-                text.toLowerCase().contains("waste")) {
+            String lowerText = text.toLowerCase();
+            if (lowerText.contains("collection") || 
+                lowerText.contains("bin") ||
+                lowerText.contains("waste")) {
                 extractBinDetails(div, bins, thisWeekBins);
             }
         }
 
         // Search for "This week" specifically
-        extractThisWeekInfo(pageText, thisWeekBins);
+        extractThisWeekInfo(lowerPageText, pageText, thisWeekBins);
 
         // Search for color keywords and collection day information
-        List<String> collectionDays = extractCollectionDays(pageText);
+        List<String> collectionDays = extractCollectionDays(pageText, lowerPageText);
         List<String> colors = extractBinColors(pageText);
-        List<String> binTypes = extractBinTypes(pageText);
+        List<String> binTypes = extractBinTypes(lowerPageText);
         Map<String, String> location = extractLocation(doc, pageText);
 
         binInfo.put("collectionDays", collectionDays);
@@ -113,7 +135,7 @@ public class BinCollectionParser {
 
     private void extractBinDetails(Element element, List<Map<String, String>> bins, List<Map<String, String>> thisWeekBins) {
         String text = element.text();
-        if (text.length() > 20 && text.length() < 500) {
+        if (text.length() > MIN_TEXT_LENGTH && text.length() < MAX_TEXT_LENGTH) {
             Map<String, String> bin = new HashMap<>();
             bin.put("details", text);
             bins.add(bin);
@@ -125,10 +147,9 @@ public class BinCollectionParser {
         }
     }
 
-    private void extractThisWeekInfo(String pageText, List<Map<String, String>> thisWeekBins) {
+    private void extractThisWeekInfo(String lowerPageText, String pageText, List<Map<String, String>> thisWeekBins) {
         // Look for "This week's collection" section ONLY
-        String lowerText = pageText.toLowerCase();
-        int thisWeekIndex = lowerText.indexOf("this week");
+        int thisWeekIndex = lowerPageText.indexOf("this week");
         
         if (thisWeekIndex == -1) {
             // No "This week's collection" section means no bins collected this week
@@ -136,97 +157,76 @@ public class BinCollectionParser {
         }
         
         // Find the exact boundaries of the "This week's collection" section
-        int start = thisWeekIndex;
-        
-        // Look for where this section ends - typically "Fortnightly", next date line, or another section
-        String afterThisWeek = pageText.substring(start);
+        String afterThisWeek = pageText.substring(thisWeekIndex);
         String lowerAfter = afterThisWeek.toLowerCase();
         
         int sectionEnd = afterThisWeek.length();
         
         // Find section boundaries (these typically mark the end of "this week")
-        int nextFortnightly = lowerAfter.indexOf("fortnightly");
-        int nextWeek = lowerAfter.indexOf("next week");
-        int nextMonth = lowerAfter.indexOf("february") ; // Look for next month indicators
-        int areaSection = lowerAfter.indexOf("area");
+        for (String boundary : SECTION_BOUNDARIES) {
+            int boundaryIndex = lowerAfter.indexOf(boundary);
+            if (boundaryIndex > 0 && boundaryIndex < sectionEnd) {
+                sectionEnd = boundaryIndex;
+            }
+        }
         
-        // Get the earliest boundary (the actual end of this week's section)
-        if (nextFortnightly > 0 && nextFortnightly < sectionEnd) {
-            sectionEnd = nextFortnightly;
+        // Check for any month name (dynamic month detection)
+        String currentMonth = LocalDate.now().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toLowerCase();
+        String nextMonth = LocalDate.now().plusMonths(1).getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toLowerCase();
+        
+        int currentMonthIdx = lowerAfter.indexOf(currentMonth);
+        int nextMonthIdx = lowerAfter.indexOf(nextMonth);
+        
+        if (currentMonthIdx > 0 && currentMonthIdx < sectionEnd) {
+            sectionEnd = currentMonthIdx;
         }
-        if (nextWeek > 0 && nextWeek < sectionEnd) {
-            sectionEnd = nextWeek;
-        }
-        if (nextMonth > 0 && nextMonth < sectionEnd) {
-            sectionEnd = nextMonth;
-        }
-        if (areaSection > 0 && areaSection < sectionEnd) {
-            sectionEnd = areaSection;
+        if (nextMonthIdx > 0 && nextMonthIdx < sectionEnd) {
+            sectionEnd = nextMonthIdx;
         }
         
         // Cap at reasonable distance to avoid picking up unrelated content
-        sectionEnd = Math.min(sectionEnd, 500);
+        sectionEnd = Math.min(sectionEnd, MAX_TEXT_LENGTH);
         
-        String thisWeekSection = afterThisWeek.substring(0, sectionEnd);
-        String lowerSection = thisWeekSection.toLowerCase();
+        String lowerSection = lowerAfter.substring(0, sectionEnd);
         
-        // Extract ONLY the bins explicitly listed in THIS section
-        // Check for exact "bin -" or "bin" pattern to match the source format
+        // Extract bins using helper method to reduce duplication
+        addBinIfPresent(lowerSection, "blue bin", "blue - paper", BLUE_BIN_DESC, "blue", thisWeekBins, false);
+        addBinIfPresent(lowerSection, "burgundy bin", "burgundy - food", BURGUNDY_BIN_DESC, "burgundy", thisWeekBins, false);
+        addBinIfPresent(lowerSection, "light grey bin", "light grey - glass", LIGHT_GREY_BIN_DESC, "light", thisWeekBins, true);
+        addBinIfPresent(lowerSection, "black bin", "black - general", BLACK_BIN_DESC, "black", thisWeekBins, true);
         
-        // Only add if the bin is mentioned in this specific section AND not marked as fortnightly/4 weekly
-        // Look for actual bin type indicators that appear BEFORE frequency markers
-        
-        if (lowerSection.contains("blue bin") || lowerSection.contains("blue - paper")) {
-            Map<String, String> bin = new HashMap<>();
-            bin.put("description", "Blue bin - Paper and card");
-            bin.put("schedule", "Collection this week");
-            bin.put("color", "blue");
-            thisWeekBins.add(bin);
-        }
-        
-        if (lowerSection.contains("burgundy bin") || lowerSection.contains("burgundy - food")) {
-            Map<String, String> bin = new HashMap<>();
-            bin.put("description", "Burgundy bin - Food and garden waste");
-            bin.put("schedule", "Collection this week");
-            bin.put("color", "burgundy");
-            thisWeekBins.add(bin);
-        }
-        
-        // Only add these if they're explicitly in THIS WEEK's section, not fortnightly/4 weekly
-        if ((lowerSection.contains("light grey bin") || lowerSection.contains("light grey - glass")) && 
+        // Also check for "black/green bin" variant
+        if (lowerSection.contains("black/green bin") && 
             !lowerSection.contains("4 weekly") && !lowerSection.contains("fortnightly")) {
-            Map<String, String> bin = new HashMap<>();
-            bin.put("description", "Light grey bin - Glass, cans and plastics");
-            bin.put("schedule", "Collection this week");
-            bin.put("color", "light");
-            thisWeekBins.add(bin);
-        }
-        
-        if ((lowerSection.contains("black bin") || lowerSection.contains("black/green bin") || lowerSection.contains("black - general")) && 
-            !lowerSection.contains("4 weekly") && !lowerSection.contains("fortnightly")) {
-            Map<String, String> bin = new HashMap<>();
-            bin.put("description", "Black/Green bin - General waste");
-            bin.put("schedule", "Collection this week");
-            bin.put("color", "black");
-            thisWeekBins.add(bin);
+            addBinToList(BLACK_BIN_DESC, "black", thisWeekBins);
         }
     }
-
-    private String capitalizeWords(String str) {
-        if (str == null || str.isEmpty()) {
-            return str;
+    
+    private void addBinIfPresent(String lowerSection, String pattern1, String pattern2, 
+                                  String description, String color, 
+                                  List<Map<String, String>> thisWeekBins, 
+                                  boolean checkFrequency) {
+        if (lowerSection.contains(pattern1) || lowerSection.contains(pattern2)) {
+            if (checkFrequency) {
+                // Only add if not marked as fortnightly/4 weekly
+                if (lowerSection.contains("4 weekly") || lowerSection.contains("fortnightly")) {
+                    return;
+                }
+            }
+            addBinToList(description, color, thisWeekBins);
         }
-        String[] words = str.split(" ");
-        StringBuilder sb = new StringBuilder();
-        for (String word : words) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append(word.substring(0, 1).toUpperCase()).append(word.substring(1));
-        }
-        return sb.toString();
+    }
+    
+    private void addBinToList(String description, String color, List<Map<String, String>> thisWeekBins) {
+        Map<String, String> bin = new HashMap<>();
+        bin.put("description", description);
+        bin.put("schedule", COLLECTION_THIS_WEEK);
+        bin.put("color", color);
+        thisWeekBins.add(bin);
     }
 
-    private List<String> extractCollectionDays(String text) {
-        List<String> days = new ArrayList<>();
+    private List<String> extractCollectionDays(String text, String lowerText) {
+        Set<String> daysSet = new HashSet<>();
         
         // Extract collection days from the schedule table/section, NOT from "This week's collection" 
         // (which just shows the calendar week date range)
@@ -238,30 +238,29 @@ public class BinCollectionParser {
         for (String day : allDays) {
             String pattern = day + " (";  // Matches "Friday (" but not just "Friday" in a date
             if (text.contains(pattern)) {
-                if (!days.contains(day)) {
-                    days.add(day);
-                }
+                daysSet.add(day);
             }
         }
         
         // If no pattern found, try simpler approach: look for days in collection/schedule context
-        if (days.isEmpty()) {
-            String lowerText = text.toLowerCase();
+        if (daysSet.isEmpty()) {
             for (String day : allDays) {
                 int dayIdx = lowerText.indexOf(day.toLowerCase());
                 if (dayIdx != -1) {
                     // Check if it's in a collection context (near "fortnightly", "weekly", "bin", etc.)
-                    String context = text.substring(Math.max(0, dayIdx - 100), Math.min(text.length(), dayIdx + 100)).toLowerCase();
-                    if (context.contains("fortnightly") || context.contains("weekly") || context.contains("bin") || context.contains("waste")) {
-                        if (!days.contains(day)) {
-                            days.add(day);
-                        }
+                    int contextStart = Math.max(0, dayIdx - CONTEXT_WINDOW);
+                    int contextEnd = Math.min(text.length(), dayIdx + CONTEXT_WINDOW);
+                    String context = text.substring(contextStart, contextEnd).toLowerCase();
+                    
+                    if (context.contains("fortnightly") || context.contains("weekly") || 
+                        context.contains("bin") || context.contains("waste")) {
+                        daysSet.add(day);
                     }
                 }
             }
         }
         
-        return days;
+        return new ArrayList<>(daysSet);
     }
 
     private List<String> extractBinColors(String text) {
@@ -276,12 +275,12 @@ public class BinCollectionParser {
         return colors;
     }
 
-    private List<String> extractBinTypes(String text) {
+    private List<String> extractBinTypes(String lowerText) {
         List<String> types = new ArrayList<>();
         String[] typeKeywords = {"General waste", "Recyclables", "Food waste", "Garden waste", "Compost", "Cardboard", "Glass", "Plastic", "Paper"};
         
         for (String type : typeKeywords) {
-            if (text.toLowerCase().contains(type.toLowerCase())) {
+            if (lowerText.contains(type.toLowerCase())) {
                 types.add(type);
             }
         }
@@ -291,11 +290,16 @@ public class BinCollectionParser {
     private Map<String, String> extractLocation(Document doc, String pageText) {
         Map<String, String> location = new HashMap<>();
         
+        if (doc == null) {
+            return location;
+        }
+        
         // First, try to extract from the page heading (h1) which usually contains "Street, Area" or "Street, SubArea, Area"
         Element heading = doc.selectFirst("h1");
         if (heading != null) {
-            String headingText = heading.text().trim();
-            if (!headingText.isEmpty()) {
+            String headingText = heading.text();
+            if (headingText != null && !headingText.trim().isEmpty()) {
+                headingText = headingText.trim();
                 // Store the full heading text as-is
                 location.put("fullLocation", headingText);
                 
@@ -315,30 +319,39 @@ public class BinCollectionParser {
         
         // Fallback: Extract from structured table data
         Elements tables = doc.select("table");
-        for (Element table : tables) {
-            Elements rows = table.select("tr");
-            for (Element row : rows) {
-                Elements cells = row.select("td, th");
+        if (tables != null) {
+            for (Element table : tables) {
+                Elements rows = table.select("tr");
+                if (rows == null) continue;
                 
-                if (cells.size() >= 2) {
-                    String label = cells.get(0).text().trim();
-                    String value = cells.get(1).text().trim();
+                for (Element row : rows) {
+                    Elements cells = row.select("td, th");
                     
-                    // Look for known location labels
-                    if (label.toLowerCase().contains("location") || label.toLowerCase().contains("address")) {
-                        String[] addressParts = value.split(",");
-                        if (addressParts.length >= 2) {
-                            location.put("fullLocation", value);
-                            location.put("street", addressParts[0].trim());
-                            location.put("area", addressParts[addressParts.length - 1].trim());
-                        } else if (addressParts.length == 1) {
-                            location.put("street", addressParts[0].trim());
+                    if (cells != null && cells.size() >= 2) {
+                        String label = cells.get(0).text();
+                        String value = cells.get(1).text();
+                        
+                        if (label == null || value == null) continue;
+                        
+                        label = label.trim();
+                        value = value.trim();
+                        
+                        // Look for known location labels
+                        if (label.toLowerCase().contains("location") || label.toLowerCase().contains("address")) {
+                            String[] addressParts = value.split(",");
+                            if (addressParts.length >= 2) {
+                                location.put("fullLocation", value);
+                                location.put("street", addressParts[0].trim());
+                                location.put("area", addressParts[addressParts.length - 1].trim());
+                            } else if (addressParts.length == 1) {
+                                location.put("street", addressParts[0].trim());
+                            }
                         }
-                    }
-                    
-                    // Extract area/town
-                    if (label.toLowerCase().contains("area") || label.toLowerCase().contains("town")) {
-                        location.put("area", value);
+                        
+                        // Extract area/town
+                        if (label.toLowerCase().contains("area") || label.toLowerCase().contains("town")) {
+                            location.put("area", value);
+                        }
                     }
                 }
             }
