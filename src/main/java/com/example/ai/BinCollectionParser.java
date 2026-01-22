@@ -170,12 +170,14 @@ public class BinCollectionParser {
             }
         }
         
-        // Check for any month name (dynamic month detection)
+        // Check for next month name appearing after the date range (dynamic month detection)
+        // Skip the first 100 characters to avoid matching month names in the date range itself
         String currentMonth = LocalDate.now().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toLowerCase();
         String nextMonth = LocalDate.now().plusMonths(1).getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toLowerCase();
         
-        int currentMonthIdx = lowerAfter.indexOf(currentMonth);
-        int nextMonthIdx = lowerAfter.indexOf(nextMonth);
+        int searchStart = Math.min(100, lowerAfter.length());
+        int currentMonthIdx = lowerAfter.indexOf(currentMonth, searchStart);
+        int nextMonthIdx = lowerAfter.indexOf(nextMonth, searchStart);
         
         if (currentMonthIdx > 0 && currentMonthIdx < sectionEnd) {
             sectionEnd = currentMonthIdx;
