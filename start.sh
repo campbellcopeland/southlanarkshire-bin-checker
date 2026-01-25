@@ -10,4 +10,5 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-/home/campbell/.maven/maven-3.9.12/bin/mvn spring-boot:run
+# /home/campbell/.maven/maven-3.9.12/bin/mvn spring-boot:run
+mvn spring-boot:run
