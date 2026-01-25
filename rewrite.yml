@@ -1,6 +1,0 @@
----
-type: specs.openrewrite.org/v1beta/recipe
-name: com.example.UpgradeSpringBoot33
-displayName: Upgrade to Spring Boot 3.3
-recipeList:
-  - org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_3
